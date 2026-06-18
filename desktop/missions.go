@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -24,30 +25,31 @@ import (
 // carry live runtime state; historical sessions (no live controller) carry only
 // persisted metadata so the user can recall what they ran before.
 type MissionTask struct {
-	TabID          string  `json:"tabId"`
-	Title          string  `json:"title,omitempty"`
-	Goal           string  `json:"goal,omitempty"`
-	GoalStatus     string  `json:"goalStatus,omitempty"` // control.GoalStatus* (running/complete/blocked/stopped)
-	RuntimeState   string  `json:"runtimeState"`         // running | waiting | idle | done | blocked
-	CurrentStep    string  `json:"currentStep,omitempty"`
-	Model          string  `json:"model,omitempty"`
-	SessionPath    string  `json:"sessionPath,omitempty"`
-	WorkspaceRoot  string  `json:"workspaceRoot,omitempty"`
-	WorkspaceName  string  `json:"workspaceName,omitempty"`
-	TopicTitle     string  `json:"topicTitle,omitempty"`
-	Scope          string  `json:"scope,omitempty"`
-	TurnCount      int     `json:"turnCount"`
-	CreatedAt      int64   `json:"createdAt,omitempty"`
-	LastActivityAt int64   `json:"lastActivityAt,omitempty"`
-	CostUsd        float64 `json:"costUsd,omitempty"`
-	CacheHit       int     `json:"cacheHit,omitempty"`
-	CacheMiss      int     `json:"cacheMiss,omitempty"`
-	Outcome        string  `json:"outcome,omitempty"` // "" active | "completed" | "abandoned"
-	Active         bool    `json:"active"`
-	Detached       bool    `json:"detached"`
-	Historical     bool    `json:"historical"`
-	Ready          bool    `json:"ready"`
-	StartupErr     string  `json:"startupErr,omitempty"`
+	TabID          string           `json:"tabId"`
+	Title          string           `json:"title,omitempty"`
+	Goal           string           `json:"goal,omitempty"`
+	GoalStatus     string           `json:"goalStatus,omitempty"` // control.GoalStatus* (running/complete/blocked/stopped)
+	RuntimeState   string           `json:"runtimeState"`         // running | waiting | idle | done | blocked
+	CurrentStep    string           `json:"currentStep,omitempty"`
+	Model          string           `json:"model,omitempty"`
+	SessionPath    string           `json:"sessionPath,omitempty"`
+	WorkspaceRoot  string           `json:"workspaceRoot,omitempty"`
+	WorkspaceName  string           `json:"workspaceName,omitempty"`
+	TopicTitle     string           `json:"topicTitle,omitempty"`
+	Scope          string           `json:"scope,omitempty"`
+	TurnCount      int              `json:"turnCount"`
+	CreatedAt      int64            `json:"createdAt,omitempty"`
+	LastActivityAt int64            `json:"lastActivityAt,omitempty"`
+	CostUsd        float64          `json:"costUsd,omitempty"`
+	CacheHit       int              `json:"cacheHit,omitempty"`
+	CacheMiss      int              `json:"cacheMiss,omitempty"`
+	Outcome        string           `json:"outcome,omitempty"` // "" active | "completed" | "abandoned"
+	Pending        []MissionPending `json:"pending,omitempty"` // approvals/asks awaiting the user
+	Active         bool             `json:"active"`
+	Detached       bool             `json:"detached"`
+	Historical     bool             `json:"historical"`
+	Ready          bool             `json:"ready"`
+	StartupErr     string           `json:"startupErr,omitempty"`
 }
 
 // TaskSnapshot is the expandable summary behind one card: the purpose, the
@@ -73,6 +75,15 @@ type MissionAction struct {
 	Kind    string `json:"kind"` // "tool" | "message"
 	Summary string `json:"summary"`
 	Failed  bool   `json:"failed,omitempty"`
+}
+
+// MissionPending is one prompt awaiting the user (a tool approval or an ask
+// question), so the board can show "needs you" and act on it without tabbing in.
+type MissionPending struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"` // "approval" | "ask"
+	Tool    string `json:"tool,omitempty"`
+	Subject string `json:"subject,omitempty"`
 }
 
 // Task outcomes set by the user from the board (M3). Kept distinct from the
@@ -221,6 +232,51 @@ func (a *App) snapshotProvider() (provider.Provider, *provider.Pricing) {
 	return prov, entry.Price
 }
 
+// missionPendingFromCtrl maps the controller's pending approvals/asks onto the
+// board's wire shape.
+func missionPendingFromCtrl(ctrl *control.Controller) []MissionPending {
+	if ctrl == nil {
+		return nil
+	}
+	items := append(ctrl.PendingApprovals(), ctrl.PendingAsks()...)
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]MissionPending, len(items))
+	for i, p := range items {
+		out[i] = MissionPending{ID: p.ID, Kind: p.Kind, Tool: p.Tool, Subject: p.Subject}
+	}
+	return out
+}
+
+// SetTaskOutcome marks a task completed or abandoned from the board (M3). This
+// is the user's call, orthogonal to the agent's own GoalStatus — it does not
+// stop a running turn, it just records the outcome (and persists it) so the task
+// sorts into the archive. An empty outcome reactivates the task.
+func (a *App) SetTaskOutcome(tabID, outcome string) (bool, error) {
+	outcome = strings.TrimSpace(outcome)
+	switch outcome {
+	case "", TaskOutcomeCompleted, TaskOutcomeAbandoned:
+	default:
+		return false, fmt.Errorf("invalid task outcome %q", outcome)
+	}
+	a.mu.Lock()
+	tab := a.tabByIDLocked(tabID)
+	if tab == nil {
+		a.mu.Unlock()
+		return false, fmt.Errorf("task %q not found", tabID)
+	}
+	tab.taskOutcome = outcome
+	tabIDForSave := tab.ID
+	a.mu.Unlock()
+	a.mu.Lock()
+	if a.tabs[tabIDForSave] == tab {
+		a.saveTabsLocked()
+	}
+	a.mu.Unlock()
+	return true, nil
+}
+
 func missionTaskFromTab(tab *WorkspaceTab, active, detached bool) MissionTask {
 	t := MissionTask{
 		TabID:         tab.ID,
@@ -249,9 +305,11 @@ func missionTaskFromTab(tab *WorkspaceTab, active, detached bool) MissionTask {
 		if t.CurrentStep == "" {
 			t.CurrentStep = lastActivitySummary(ctrl.History())
 		}
+		t.Pending = missionPendingFromCtrl(ctrl)
 	} else {
 		t.RuntimeState = "idle"
 	}
+	t.Outcome = tab.taskOutcome
 
 	// Cost comes from the accumulated per-tab telemetry.
 	tab.telemMu.Lock()

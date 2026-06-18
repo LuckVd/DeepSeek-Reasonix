@@ -120,7 +120,7 @@ export function MissionsPanel({
           ) : filtered.length === 0 ? (
             <div className="mission-panel__empty">没有任务</div>
           ) : (
-            filtered.map((t) => <MissionCard key={t.tabId} task={t} onOpenTab={onOpenTab} />)
+            filtered.map((t) => <MissionCard key={t.tabId} task={t} onOpenTab={onOpenTab} onRefresh={refresh} />)
           )}
         </div>
       </div>

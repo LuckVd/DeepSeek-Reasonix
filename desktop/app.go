@@ -465,6 +465,7 @@ func (a *App) restoreOrBuildTabs() {
 			tab.tokenMode = boot.NormalizeTokenMode(entry.TokenMode)
 			tab.mode = persistedTabMode(entry.Mode)
 			tab.goal = strings.TrimSpace(entry.Goal)
+			tab.taskOutcome = entry.TaskOutcome
 			tab.toolApprovalMode = normalizeToolApprovalMode(entry.ToolApprovalMode)
 			if tab.toolApprovalMode == control.ToolApprovalAsk && tabModeHasAutoApproveTools(entry.Mode) {
 				tab.toolApprovalMode = control.ToolApprovalYolo

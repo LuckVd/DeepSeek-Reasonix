@@ -959,6 +959,7 @@ export interface MissionTask {
   cacheHit?: number;
   cacheMiss?: number;
   outcome?: string; // "" active | "completed" | "abandoned"
+  pending?: MissionPending[]; // approvals/asks awaiting the user
   active: boolean;
   detached: boolean;
   historical: boolean;
@@ -970,6 +971,15 @@ export interface MissionAction {
   kind: "tool" | "message";
   summary: string;
   failed?: boolean;
+}
+
+// MissionPending is one prompt awaiting the user (a tool approval or an ask),
+// so the board can surface "needs you" and act on it without tabbing in.
+export interface MissionPending {
+  id: string;
+  kind: "approval" | "ask";
+  tool?: string;
+  subject?: string;
 }
 
 // TaskSnapshot is the expandable summary behind one card (purpose / progress /

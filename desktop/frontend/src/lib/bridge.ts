@@ -311,6 +311,8 @@ export interface AppBindings {
   // per-task summary, pulled on demand.
   MissionTasks(): Promise<MissionTask[]>;
   TaskSnapshot(tabID: string): Promise<TaskSnapshot>;
+  // Mark a task completed/abandoned (or "" to reactivate) from the board.
+  SetTaskOutcome(tabID: string, outcome: string): Promise<boolean>;
 }
 
 // Compile-time drift check. Exclude<A, B> extracts keys in A that are missing
@@ -2693,6 +2695,9 @@ function makeMockApp(): AppBindings {
     },
     async TaskSnapshot(tabID: string) {
       return { tabId: tabID, purpose: "mock purpose", progress: "in progress", generatedBy: "heuristic" as const };
+    },
+    async SetTaskOutcome(_tabID: string, _outcome: string) {
+      return true;
     },
     async OpenProjectTab(workspaceRoot: string, _topicID: string) {
       const existing = mockTabs.find((tab) => tab.scope === "project" && tab.workspaceRoot === workspaceRoot && tab.topicId === _topicID);

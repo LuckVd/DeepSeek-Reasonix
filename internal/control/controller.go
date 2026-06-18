@@ -1208,6 +1208,46 @@ func (c *Controller) PendingPrompt() bool {
 	return len(c.approvals) > 0 || len(c.asks) > 0
 }
 
+// PendingItem is one prompt currently blocked on the user — surfaced to the
+// Mission Control board so a task that needs input can be acted on (or flagged)
+// without entering the tab.
+type PendingItem struct {
+	ID      string
+	Kind    string // "approval" | "ask"
+	Tool    string
+	Subject string
+}
+
+// PendingApprovals returns the tool-call approvals currently blocked on the
+// user, for the board to surface and resolve (approve/deny) without entering the
+// tab. The ID is what gets passed back to Approve.
+func (c *Controller) PendingApprovals() []PendingItem {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]PendingItem, 0, len(c.approvals))
+	for id, p := range c.approvals {
+		out = append(out, PendingItem{ID: id, Kind: "approval", Tool: p.tool, Subject: p.subject})
+	}
+	return out
+}
+
+// PendingAsks returns the in-flight ask-tool question batches, so the board can
+// flag a task waiting on a structured answer. (Answering from the board is left
+// to the tab; the board just surfaces "needs your input".)
+func (c *Controller) PendingAsks() []PendingItem {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]PendingItem, 0, len(c.asks))
+	for id, p := range c.asks {
+		subject := ""
+		if len(p.questions) > 0 {
+			subject = p.questions[0].Prompt
+		}
+		out = append(out, PendingItem{ID: id, Kind: "ask", Subject: subject})
+	}
+	return out
+}
+
 // RuntimeStatus reports the active work owned by the foreground controller.
 func (c *Controller) RuntimeStatus() RuntimeStatus {
 	c.mu.Lock()

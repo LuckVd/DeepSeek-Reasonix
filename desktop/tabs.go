@@ -72,6 +72,7 @@ type WorkspaceTab struct {
 	tokenMode        string
 	mode             string // "normal" | "plan" | "yolo" | "plan-yolo"; yolo/full access is runtime-only
 	goal             string
+	taskOutcome      string // "" active | "completed" | "abandoned" — user-set, orthogonal to agent GoalStatus
 	toolApprovalMode string
 	disabledMCP      map[string]ServerView
 	mcpOrder         []string
@@ -1877,6 +1878,7 @@ type desktopTabEntry struct {
 	TokenMode        string  `json:"tokenMode,omitempty"`
 	Mode             string  `json:"mode,omitempty"`
 	Goal             string  `json:"goal,omitempty"`
+	TaskOutcome      string  `json:"taskOutcome,omitempty"`
 	ToolApprovalMode string  `json:"toolApprovalMode,omitempty"`
 }
 
@@ -1920,6 +1922,7 @@ func (a *App) saveTabsCollectLocked() (string, []desktopTabEntry, string, uint64
 				TokenMode:        persistedTabTokenMode(currentTabTokenMode(tab)),
 				Mode:             persistedTabMode(currentTabMode(tab)),
 				Goal:             strings.TrimSpace(currentTabGoal(tab)),
+				TaskOutcome:      tab.taskOutcome,
 				ToolApprovalMode: persistedToolApprovalMode(currentTabToolApprovalMode(tab)),
 			})
 		}
