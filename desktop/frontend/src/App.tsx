@@ -20,6 +20,7 @@ import {
   FileJson,
   GitBranch,
   History,
+  LayoutGrid,
   MessageSquare,
   Settings as SettingsIcon,
   Pencil,
@@ -44,6 +45,7 @@ import { UndoRewindBanner } from "./components/UndoRewindBanner";
 import { ClearContextCard } from "./components/ClearContextCard";
 import { StatusBar } from "./components/StatusBar";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { MissionsPanel } from "./components/MissionsPanel";
 import { CommandPalette, type PaletteItem } from "./components/CommandPalette";
 import { SettingsPanel, type SettingsInitialFocus } from "./components/SettingsPanel";
 import { UpdateBanner } from "./components/UpdateBanner";
@@ -863,6 +865,7 @@ export default function App() {
   const [desktopLayoutStyle, setDesktopLayoutStyle] = useState<DesktopLayoutStyle>("workbench");
   const [startupUpdateChecksEnabled, setStartupUpdateChecksEnabled] = useState<boolean | null>(null);
   const [histView, setHistView] = useState<HistoryViewState | null>(null);
+  const [missionBoardOpen, setMissionBoardOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteSessions, setPaletteSessions] = useState<SessionMeta[]>([]);
@@ -2160,6 +2163,7 @@ export default function App() {
       { id: "cmd-appearance", group: t("palette.group.commands"), title: t("palette.cmd.appearance"), icon: <Palette size={15} />, compact: true, keywords: ["theme", "appearance", "外观", "主题"], run: () => setSettingsTarget("appearance") },
       { id: "cmd-memory", group: t("palette.group.commands"), title: t("palette.cmd.memory"), icon: <Brain size={15} />, compact: true, keywords: ["memory", "记忆"], run: () => setSettingsTarget("memory") },
       { id: "cmd-models", group: t("palette.group.commands"), title: t("palette.cmd.models"), icon: <Cpu size={15} />, compact: true, keywords: ["model", "模型"], run: () => setSettingsTarget("models") },
+      { id: "cmd-mission", group: t("palette.group.commands"), title: "任务总览 Mission Control", icon: <LayoutGrid size={15} />, compact: true, keywords: ["mission", "tasks", "board", "任务", "看板"], run: () => setMissionBoardOpen(true) },
     ];
     const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const dayLabel = (ms: number) => {
@@ -2980,6 +2984,20 @@ export default function App() {
           onPurge={onPurgeTrashedSession}
           onPurgeAll={onPurgeAllTrashedSessions}
           onClose={closeHistory}
+        />
+      )}
+
+      {missionBoardOpen && (
+        <MissionsPanel
+          onClose={() => setMissionBoardOpen(false)}
+          onOpenTab={async (tabId) => {
+            try {
+              await app.SetActiveTab(tabId);
+            } catch {
+              /* ignore — the tab may be historical or already closed */
+            }
+            setMissionBoardOpen(false);
+          }}
         />
       )}
 

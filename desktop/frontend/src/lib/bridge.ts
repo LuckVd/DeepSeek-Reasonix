@@ -38,6 +38,7 @@ import type {
   MemorySuggestionsView,
   MemoryView,
   Meta,
+  MissionTask,
   ModelInfo,
   NetworkView,
   ProjectNode,
@@ -54,6 +55,7 @@ import type {
   SkillView,
   SlashArgsResult,
   TabMeta,
+  TaskSnapshot,
   TopicMeta,
   UpdateDownloadResult,
   UpdateInfo,
@@ -304,6 +306,11 @@ export interface AppBindings {
   // New native-feel bindings (added with the desktop native-feel plan).
   ConfirmAction(req: NativeConfirmRequest): Promise<boolean>;
   SaveWindowState(state: DesktopWindowState): Promise<void>;
+  // Mission Control board (desktop/missions.go). MissionTasks is the aggregate
+  // row list (live + historical sessions); TaskSnapshot is the expandable
+  // per-task summary, pulled on demand.
+  MissionTasks(): Promise<MissionTask[]>;
+  TaskSnapshot(tabID: string): Promise<TaskSnapshot>;
 }
 
 // Compile-time drift check. Exclude<A, B> extracts keys in A that are missing
@@ -2662,6 +2669,30 @@ function makeMockApp(): AppBindings {
     // Tab management mocks.
     async ListTabs() {
       return mockTabs.map((tab) => ({ ...tab }));
+    },
+    async MissionTasks() {
+      return mockTabs.map((tab) => ({
+        tabId: tab.id,
+        title: tab.topicTitle,
+        goal: tab.goal,
+        goalStatus: tab.goalStatus,
+        runtimeState: (tab.pendingPrompt ? "waiting" : tab.running ? "running" : "idle") as MissionTask["runtimeState"],
+        currentStep: tab.running ? "mock: working…" : undefined,
+        model: tab.label,
+        sessionPath: tab.sessionPath,
+        workspaceRoot: tab.workspaceRoot,
+        workspaceName: tab.workspaceName,
+        topicTitle: tab.topicTitle,
+        scope: tab.scope,
+        turnCount: 3,
+        active: tab.active,
+        detached: false,
+        historical: false,
+        ready: tab.ready,
+      }));
+    },
+    async TaskSnapshot(tabID: string) {
+      return { tabId: tabID, purpose: "mock purpose", progress: "in progress", generatedBy: "heuristic" as const };
     },
     async OpenProjectTab(workspaceRoot: string, _topicID: string) {
       const existing = mockTabs.find((tab) => tab.scope === "project" && tab.workspaceRoot === workspaceRoot && tab.topicId === _topicID);

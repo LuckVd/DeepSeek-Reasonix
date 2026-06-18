@@ -935,3 +935,53 @@ export interface UpdateProgress {
   total: number;
   err?: string;
 }
+
+// Mission Control board (desktop/missions.go) — one task per tab/session. The
+// board's purpose is a glanceable view across every concurrent task: what each
+// is doing, which need the user, and the cost, without tabbing into each one.
+export interface MissionTask {
+  tabId: string;
+  title?: string;
+  goal?: string;
+  goalStatus?: GoalStatus;
+  runtimeState: "running" | "waiting" | "idle" | "done" | "blocked";
+  currentStep?: string;
+  model?: string;
+  sessionPath?: string;
+  workspaceRoot?: string;
+  workspaceName?: string;
+  topicTitle?: string;
+  scope?: string;
+  turnCount: number;
+  createdAt?: number;
+  lastActivityAt?: number;
+  costUsd?: number;
+  cacheHit?: number;
+  cacheMiss?: number;
+  outcome?: string; // "" active | "completed" | "abandoned"
+  active: boolean;
+  detached: boolean;
+  historical: boolean;
+  ready: boolean;
+  startupErr?: string;
+}
+
+export interface MissionAction {
+  kind: "tool" | "message";
+  summary: string;
+  failed?: boolean;
+}
+
+// TaskSnapshot is the expandable summary behind one card (purpose / progress /
+// actions tried / dead-ends / next step). generatedBy is "heuristic" in M1
+// (derived from history) and "llm" once internal/snapshot lands in M2; the shape
+// is identical across both so the card needs no changes between milestones.
+export interface TaskSnapshot {
+  tabId: string;
+  purpose?: string;
+  progress?: string;
+  nextStep?: string;
+  actions?: MissionAction[];
+  deadEnds?: string[];
+  generatedBy: "heuristic" | "llm";
+}
