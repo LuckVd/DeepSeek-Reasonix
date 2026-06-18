@@ -209,6 +209,7 @@ const (
 	UsageSourceCompaction = "compaction"
 	UsageSourceClassifier = "classifier"
 	UsageSourceTitle      = "title"
+	UsageSourceSnapshot   = "snapshot" // Mission Control task snapshot (independent summary call)
 )
 
 // Event is one increment in a turn's event stream. Read the field(s) documented

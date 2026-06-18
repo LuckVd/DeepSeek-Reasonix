@@ -95,6 +95,12 @@ type App struct {
 	// It is process-local by design: shutdown closes every detached controller.
 	detachedSessions map[string]*WorkspaceTab
 
+	// snapshotProv is the lazily-built cheap model used for Mission Control task
+	// snapshots (mirrors serve's title provider). Guarded by snapshotProvMu.
+	snapshotProv   provider.Provider
+	snapshotPrice  *provider.Pricing
+	snapshotProvMu sync.Mutex
+
 	// tabsSaveMu serializes writes to desktop-tabs.json and its fixed .tmp path.
 	tabsSaveMu             sync.Mutex
 	tabsSaveVersion        uint64 // protected by mu; assigned when collecting a snapshot

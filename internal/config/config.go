@@ -741,6 +741,11 @@ type AgentConfig struct {
 	SubagentModels   map[string]string `toml:"subagent_models"`
 	SubagentEffort   string            `toml:"subagent_effort"`
 	SubagentEfforts  map[string]string `toml:"subagent_efforts"`
+	// SnapshotModel is the provider/model used for Mission Control task snapshots
+	// (the expandable per-task summary). Empty falls back to SubagentModel, then
+	// the default model — kept separate so snapshots can ride a cheap model
+	// regardless of the executor's model.
+	SnapshotModel string `toml:"snapshot_model"`
 	// OutputStyle selects a persona/tone block folded into the system prompt at
 	// startup (a built-in like "explanatory"/"learning"/"concise", or a custom
 	// .reasonix/output-styles/<name>.md). Empty = the unmodified prompt.

@@ -4,8 +4,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"reasonix/internal/agent"
+	"reasonix/internal/boot"
+	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
+	"reasonix/internal/snapshot"
 )
 
 // Mission Control — a read-mostly aggregate view of every task the user is
@@ -124,16 +128,97 @@ func (a *App) MissionTasks() []MissionTask {
 	return out
 }
 
-// TaskSnapshot returns the expandable summary for one task. M1 derives it
-// heuristically from the live session history; M2 replaces the body with an
-// LLM call (internal/snapshot) returning the same shape.
+// TaskSnapshot returns the expandable summary for one task. It asks the snapshot
+// package for an LLM summary (a cheap model, independent of the task's own
+// model) and falls back to the M1 heuristic when no provider is configured or
+// the call fails — so a card always has something to show. Historical tasks
+// (id "hist:<sessionPath>") load the session file and summarize that.
 func (a *App) TaskSnapshot(tabID string) (TaskSnapshot, error) {
+	if histPath, ok := strings.CutPrefix(tabID, "hist:"); ok {
+		if sess, err := agent.LoadSession(histPath); err == nil {
+			return a.llmOrHeuristicSnapshot(tabID, histPath, "", "", sess.Snapshot()), nil
+		}
+		return TaskSnapshot{TabID: tabID, GeneratedBy: "heuristic"}, nil
+	}
 	tab := a.tabByID(tabID)
 	if tab == nil || tab.Ctrl == nil {
 		return TaskSnapshot{TabID: tabID, GeneratedBy: "heuristic"}, nil
 	}
 	ctrl := tab.Ctrl
-	return heuristicSnapshot(tabID, currentTabGoal(tab), currentTabGoalStatus(tab), ctrl.History()), nil
+	return a.llmOrHeuristicSnapshot(tabID, ctrl.SessionPath(), currentTabGoal(tab), currentTabGoalStatus(tab), ctrl.History()), nil
+}
+
+// llmOrHeuristicSnapshot generates an LLM snapshot and degrades to the M1
+// heuristic on any failure (no provider, timeout, empty/garbage output).
+func (a *App) llmOrHeuristicSnapshot(tabID, sessionPath, goal, goalStatus string, msgs []provider.Message) TaskSnapshot {
+	prov, pricing := a.snapshotProvider()
+	if prov != nil {
+		snap, err := snapshot.Generate(a.bootContext(), snapshot.Options{
+			SessionPath: sessionPath,
+			Messages:    msgs,
+			Goal:        goal,
+			Prov:        prov,
+			Pricing:     pricing,
+		})
+		if err == nil {
+			return toTaskSnapshot(tabID, snap, "llm")
+		}
+	}
+	return heuristicSnapshot(tabID, goal, goalStatus, msgs)
+}
+
+// toTaskSnapshot maps the snapshot package's Snapshot onto the board's
+// TaskSnapshot — the same shape the frontend already renders from M1.
+func toTaskSnapshot(tabID string, snap *snapshot.Snapshot, generatedBy string) TaskSnapshot {
+	t := TaskSnapshot{
+		TabID:       tabID,
+		Purpose:     snap.Purpose,
+		Progress:    snap.Progress,
+		NextStep:    snap.NextStep,
+		DeadEnds:    snap.DeadEnds,
+		GeneratedBy: generatedBy,
+	}
+	if len(snap.Actions) > 0 {
+		t.Actions = make([]MissionAction, len(snap.Actions))
+		for i, act := range snap.Actions {
+			t.Actions[i] = MissionAction{Kind: act.Kind, Summary: act.Summary, Failed: act.Failed}
+		}
+	}
+	return t
+}
+
+// snapshotProvider lazily builds the cheap model used for task snapshots —
+// mirrors serve.initTitleProvider: SnapshotModel → SubagentModel → the default
+// model. Returns nil if nothing resolves; callers fall back to the heuristic.
+func (a *App) snapshotProvider() (provider.Provider, *provider.Pricing) {
+	a.snapshotProvMu.Lock()
+	defer a.snapshotProvMu.Unlock()
+	if a.snapshotProv != nil {
+		return a.snapshotProv, a.snapshotPrice
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, nil
+	}
+	ref := strings.TrimSpace(cfg.Agent.SnapshotModel)
+	if ref == "" {
+		ref = strings.TrimSpace(cfg.Agent.SubagentModel)
+	}
+	resolved, _, ok := cfg.ResolveModelWithFallback(ref)
+	if !ok {
+		return nil, nil
+	}
+	entry, ok := cfg.ResolveModel(resolved)
+	if !ok {
+		return nil, nil
+	}
+	prov, err := boot.NewProvider(entry)
+	if err != nil {
+		return nil, nil
+	}
+	a.snapshotProv = prov
+	a.snapshotPrice = entry.Price
+	return prov, entry.Price
 }
 
 func missionTaskFromTab(tab *WorkspaceTab, active, detached bool) MissionTask {
