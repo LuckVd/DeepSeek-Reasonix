@@ -2952,7 +2952,7 @@ export default function App() {
           )}
         </section>
 
-        {workspacePanelGridOpen && (
+        {workspacePanelGridOpen && !missionBoardOpen && (
           <button
             className="workspace-panel-resizer"
             type="button"
@@ -2968,7 +2968,7 @@ export default function App() {
           />
         )}
 
-        {workspacePanelRenderable && (
+        {workspacePanelRenderable && !missionBoardOpen && (
           <aside
             className={[
               "workbench-dock",
