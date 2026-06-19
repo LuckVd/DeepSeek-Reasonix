@@ -2389,7 +2389,7 @@ export default function App() {
           .join(" ")}
         style={layoutStyle}
       >
-        {!workbenchChromeHidden && (
+        {!workbenchChromeHidden && !missionBoardOpen && (
           <AppChrome
             platform={desktopPlatform}
             browserPreviewChrome={browserPreviewChrome}
