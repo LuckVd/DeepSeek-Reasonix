@@ -1609,6 +1609,14 @@ a[href] {
   grid-row: 1;
 }
 
+/* Mission Control board open: the chat-pane spans the full right side —
+   covering the (now empty) app-chrome row and any reserved workspace
+   columns — so the board leaves no blank gaps. Sidebar (col 1) stays. */
+.chat-pane--board {
+  grid-row: 1 / -1;
+  grid-column: 2 / -1;
+}
+
 .app--darwin .layout--workbench-chrome-hidden.layout--sidebar-collapsed .topicbar {
   padding-left: 96px;
 }

@@ -2608,7 +2608,7 @@ export default function App() {
           onDoubleClick={() => setExpandedSidebarWidth(defaultSidebarWidth())}
         />
 
-        <section className="chat-pane">
+        <section className={`chat-pane${missionBoardOpen ? " chat-pane--board" : ""}`}>
           {missionBoardOpen ? (
             <MissionsPanel
               fullPage
