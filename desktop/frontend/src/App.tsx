@@ -957,6 +957,9 @@ export default function App() {
 
   const closeTransientOverlays = useCallback(() => {
     setTransientOverlayDismissSignal((signal) => signal + 1);
+    // The full-page Mission Control board is a transient view: any navigation
+    // (new session, switching tabs/projects, opening settings/palette) leaves it.
+    setMissionBoardOpen(false);
   }, []);
 
   const reloadSidebarImConnections = useCallback(async () => {
@@ -2428,6 +2431,16 @@ export default function App() {
 
               <div className="sidebar__quick-actions">
                 <button
+                  className={`sidebar__entry${missionBoardOpen ? " sidebar__entry--active" : ""}`}
+                  type="button"
+                  onClick={() => setMissionBoardOpen((v) => !v)}
+                  title={t("sidebar.missions")}
+                  aria-pressed={missionBoardOpen}
+                >
+                  <LayoutGrid size={18} aria-hidden="true" />
+                  <span>{t("sidebar.missions")}</span>
+                </button>
+                <button
                   className="sidebar__quick-action"
                   type="button"
                   onClick={() => {
@@ -2444,6 +2457,15 @@ export default function App() {
               <div className="sidebar__brand" aria-hidden={sidebarCollapsed}>
                 <img src={logoWordmark} alt="Reasonix" className="sidebar__brand-logo" draggable={false} />
               </div>
+
+              <button
+                className={`sidebar__entry${missionBoardOpen ? " sidebar__entry--active" : ""}`}
+                onClick={() => setMissionBoardOpen((v) => !v)}
+                aria-pressed={missionBoardOpen}
+              >
+                <LayoutGrid size={18} />
+                <span>{t("sidebar.missions")}</span>
+              </button>
 
               <button
                 className="sidebar__new"
@@ -2587,6 +2609,20 @@ export default function App() {
         />
 
         <section className="chat-pane">
+          {missionBoardOpen ? (
+            <MissionsPanel
+              fullPage
+              onClose={() => setMissionBoardOpen(false)}
+              onOpenTab={async (tabId) => {
+                try {
+                  await app.SetActiveTab(tabId);
+                } catch {
+                  /* ignore — the tab may be historical or already closed */
+                }
+                setMissionBoardOpen(false);
+              }}
+            />
+          ) : (
           <>
           <header className="topicbar">
             {workbenchChromeHidden && (
@@ -2913,6 +2949,7 @@ export default function App() {
           </footer>
           )}
           </>
+          )}
         </section>
 
         {workspacePanelGridOpen && (
@@ -3028,20 +3065,6 @@ export default function App() {
             onClose={closeHistory}
           />
         </Suspense>
-      )}
-
-      {missionBoardOpen && (
-        <MissionsPanel
-          onClose={() => setMissionBoardOpen(false)}
-          onOpenTab={async (tabId) => {
-            try {
-              await app.SetActiveTab(tabId);
-            } catch {
-              /* ignore — the tab may be historical or already closed */
-            }
-            setMissionBoardOpen(false);
-          }}
-        />
       )}
 
       {settingsTarget !== null && (

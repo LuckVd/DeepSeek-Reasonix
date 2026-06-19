@@ -39,6 +39,7 @@ export const zhTW: Record<DictKey, string> = {
   "sidebar.workspace": "工作區",
   "sidebar.changeWorkspace": "更改",
   "sidebar.navigation": "Reasonix 導航",
+  "sidebar.missions": "任務看板",
   "sidebar.plugins": "插件",
   "sidebar.scheduledTasks": "定時任務",
   "sidebar.utilityActions": "側邊欄工具",

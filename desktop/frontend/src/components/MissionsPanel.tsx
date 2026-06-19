@@ -35,9 +35,13 @@ const REFRESH_KINDS = new Set([
 export function MissionsPanel({
   onClose,
   onOpenTab,
+  fullPage = false,
 }: {
   onClose: () => void;
   onOpenTab?: (tabId: string) => void;
+  // fullPage renders the board as a filled page (no modal backdrop) so it can be
+  // embedded as the main content area instead of floated as an overlay.
+  fullPage?: boolean;
 }) {
   const [tasks, setTasks] = useState<MissionTask[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
@@ -76,53 +80,63 @@ export function MissionsPanel({
     }
   });
 
+  const content = (
+    <>
+      <div className="mission-panel__head">
+        <div className="mission-panel__title">
+          <h2>任务总览</h2>
+          {waitingCount > 0 && <span className="mission-panel__badge">{waitingCount} 待处理</span>}
+        </div>
+        <div className="mission-panel__actions">
+          <button
+            className="mission-panel__refresh"
+            onClick={() => {
+              setSpinning(true);
+              refresh();
+            }}
+            title="刷新"
+          >
+            <RefreshCw size={15} className={spinning ? "mission-panel__spin" : ""} />
+          </button>
+          <button className="mission-panel__close" onClick={onClose} title="关闭">
+            <X size={17} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mission-panel__filters">
+        {(Object.keys(FILTER_LABEL) as Filter[]).map((f) => (
+          <button
+            key={f}
+            className={`mission-panel__filter${filter === f ? " mission-panel__filter--active" : ""}`}
+            onClick={() => setFilter(f)}
+          >
+            {FILTER_LABEL[f]}
+            {f === "waiting" && waitingCount > 0 ? ` (${waitingCount})` : ""}
+          </button>
+        ))}
+      </div>
+
+      <div className="mission-panel__body">
+        {loading ? (
+          <div className="mission-panel__empty">加载中…</div>
+        ) : filtered.length === 0 ? (
+          <div className="mission-panel__empty">没有任务</div>
+        ) : (
+          filtered.map((t) => <MissionCard key={t.tabId} task={t} onOpenTab={onOpenTab} onRefresh={refresh} />)
+        )}
+      </div>
+    </>
+  );
+
+  if (fullPage) {
+    return <div className="mission-panel mission-panel--page">{content}</div>;
+  }
+
   return (
     <div className="mission-overlay" onClick={onClose}>
       <div className="mission-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="mission-panel__head">
-          <div className="mission-panel__title">
-            <h2>任务总览</h2>
-            {waitingCount > 0 && <span className="mission-panel__badge">{waitingCount} 待处理</span>}
-          </div>
-          <div className="mission-panel__actions">
-            <button
-              className="mission-panel__refresh"
-              onClick={() => {
-                setSpinning(true);
-                refresh();
-              }}
-              title="刷新"
-            >
-              <RefreshCw size={15} className={spinning ? "mission-panel__spin" : ""} />
-            </button>
-            <button className="mission-panel__close" onClick={onClose} title="关闭">
-              <X size={17} />
-            </button>
-          </div>
-        </div>
-
-        <div className="mission-panel__filters">
-          {(Object.keys(FILTER_LABEL) as Filter[]).map((f) => (
-            <button
-              key={f}
-              className={`mission-panel__filter${filter === f ? " mission-panel__filter--active" : ""}`}
-              onClick={() => setFilter(f)}
-            >
-              {FILTER_LABEL[f]}
-              {f === "waiting" && waitingCount > 0 ? ` (${waitingCount})` : ""}
-            </button>
-          ))}
-        </div>
-
-        <div className="mission-panel__body">
-          {loading ? (
-            <div className="mission-panel__empty">加载中…</div>
-          ) : filtered.length === 0 ? (
-            <div className="mission-panel__empty">没有任务</div>
-          ) : (
-            filtered.map((t) => <MissionCard key={t.tabId} task={t} onOpenTab={onOpenTab} onRefresh={refresh} />)
-          )}
-        </div>
+        {content}
       </div>
     </div>
   );

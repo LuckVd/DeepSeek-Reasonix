@@ -48,6 +48,7 @@ export const en = {
   "sidebar.workspace": "Workspace",
   "sidebar.changeWorkspace": "Change",
   "sidebar.navigation": "Reasonix navigation",
+  "sidebar.missions": "Mission Control",
   "sidebar.plugins": "Plugins",
   "sidebar.scheduledTasks": "Scheduled tasks",
   "sidebar.utilityActions": "Sidebar tools",
