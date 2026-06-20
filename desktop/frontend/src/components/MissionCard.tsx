@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { app } from "../lib/bridge";
@@ -43,15 +43,44 @@ export function MissionCard({
 
   async function toggle() {
     if (!canExpand) return;
-    const next = !open;
-    setOpen(next);
-    if (next && !snap && !loadingSnap) {
-      setLoadingSnap(true);
+    setOpen((v) => !v);
+  }
+
+  // Re-fetch the snapshot when the card opens or when the task has new activity
+  // (the board refreshes on turn boundaries; the backend cache is warmed by then
+  // via the stop trigger). TaskSnapshot is non-blocking (a cache read), so this
+  // is cheap and never spins for an already-cached summary — it just picks up the
+  // background refresh so an expanded card stays current instead of freezing on
+  // the first-fetch value.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
       try {
-        setSnap(await app.TaskSnapshot(task.tabId));
+        setLoadingSnap(true);
+        const s = await app.TaskSnapshot(task.tabId);
+        if (!cancelled) setSnap(s);
       } catch {
-        /* leave snap null; the body shows a fallback */
+        /* keep last good snapshot */
+      } finally {
+        if (!cancelled) setLoadingSnap(false);
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, task.tabId, task.lastActivityAt]);
+
+  // Manual refresh: force a fresh LLM summary (bypasses the cache). Blocks on the
+  // call — the user explicitly asked for an update.
+  async function refreshManual() {
+    if (loadingSnap || busy) return;
+    try {
+      setLoadingSnap(true);
+      setSnap(await app.RefreshTaskSnapshot(task.tabId));
+    } catch {
+      /* keep last */
+    } finally {
       setLoadingSnap(false);
     }
   }
@@ -210,6 +239,18 @@ export function MissionCard({
           {loadingSnap && <div className="mission-card__loading">正在生成摘要…</div>}
           {!loadingSnap && snap && <SnapshotView snap={snap} />}
           {!loadingSnap && !snap && <div className="mission-card__loading">暂无摘要</div>}
+          {snap && (
+            <div className="mission-card__snap-meta">
+              <span className="mission-card__snap-status">{snapStatus(snap, task)}</span>
+              <button
+                className="mission-btn mission-btn--refresh-snap"
+                onClick={refreshManual}
+                disabled={loadingSnap || busy}
+              >
+                刷新摘要
+              </button>
+            </div>
+          )}
           {canExpand && onOpenTab && (
             <button className="mission-card__open" onClick={() => onOpenTab(task.tabId)}>
               <ExternalLink size={13} /> 打开此任务
@@ -219,6 +260,25 @@ export function MissionCard({
       )}
     </div>
   );
+}
+
+// snapStatus says whether the displayed summary is current: "生成于 X 前" when it
+// covers the latest activity, or a hint that newer activity exists (the background
+// refresh will catch up; the manual button forces it immediately).
+function snapStatus(snap: TaskSnapshot, task: MissionTask): string {
+  if (!snap.generatedAt) return "";
+  if (task.lastActivityAt && task.lastActivityAt > snap.generatedAt) {
+    return "有新活动，摘要更新中…";
+  }
+  return `生成于 ${relTime(snap.generatedAt)}`;
+}
+
+function relTime(unixSec: number): string {
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - unixSec);
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  return `${Math.floor(diff / 86400)} 天前`;
 }
 
 function SnapshotView({ snap }: { snap: TaskSnapshot }) {

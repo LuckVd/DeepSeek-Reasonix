@@ -103,6 +103,12 @@ type App struct {
 	snapshotPrice  *provider.Pricing
 	snapshotProvMu sync.Mutex
 
+	// snapshotInflight dedups background snapshot generation per tab so repeated
+	// board refreshes don't fire overlapping LLM calls for the same task. The
+	// board pre-warms snapshots at stop points (see refreshStoppedSnapshots).
+	snapshotInflight map[string]bool
+	snapshotGenMu    sync.Mutex
+
 	// sharedHosts holds one *plugin.Host per workspace root, shared by all
 	// controllers/tabs in that root so MCP subprocesses (CodeGraph, etc.) are
 	// spawned once instead of N times. Lifecycle: first Acquire creates the

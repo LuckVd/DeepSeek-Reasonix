@@ -329,6 +329,9 @@ export interface AppBindings {
   // per-task summary, pulled on demand.
   MissionTasks(): Promise<MissionTask[]>;
   TaskSnapshot(tabID: string): Promise<TaskSnapshot>;
+  // RefreshTaskSnapshot forces a fresh summary (bypassing the cache) — the board's
+  // manual "refresh summary" button. Blocks on the LLM call.
+  RefreshTaskSnapshot(tabID: string): Promise<TaskSnapshot>;
   // Mark a task completed/abandoned (or "" to reactivate) from the board.
   SetTaskOutcome(tabID: string, outcome: string): Promise<boolean>;
 }
@@ -2733,6 +2736,9 @@ function makeMockApp(): AppBindings {
     },
     async TaskSnapshot(tabID: string) {
       return { tabId: tabID, purpose: "mock purpose", progress: "in progress", generatedBy: "heuristic" as const };
+    },
+    async RefreshTaskSnapshot(tabID: string) {
+      return { tabId: tabID, purpose: "mock purpose (refreshed)", progress: "in progress", generatedBy: "llm" as const, generatedAt: Math.floor(Date.now() / 1000) };
     },
     async SetTaskOutcome(_tabID: string, _outcome: string) {
       return true;

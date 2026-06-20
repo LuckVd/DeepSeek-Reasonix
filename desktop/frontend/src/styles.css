@@ -1612,7 +1612,7 @@ a[href] {
 /* Mission Control board open: the chat-pane spans the full right side —
    covering the (now empty) app-chrome row and any reserved workspace
    columns — so the board leaves no blank gaps. Sidebar (col 1) stays. */
-.chat-pane--board {
+.chat-pane.chat-pane--board {
   grid-row: 1 / -1;
   grid-column: 2 / -1;
 }
@@ -22429,6 +22429,17 @@ a[href] {
   gap: 5px;
 }
 .mission-card__open:hover { background: var(--border); color: var(--fg); }
+
+.mission-card__snap-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 2px;
+  margin-top: 4px;
+}
+.mission-card__snap-status { font-size: 11px; color: var(--fg-faint); }
+.mission-btn--refresh-snap { padding: 2px 8px; font-size: 11px; }
 
 .mission-snap { display: flex; flex-direction: column; gap: 10px; padding: 8px 0; }
 .mission-snap__section { display: flex; flex-direction: column; gap: 3px; }

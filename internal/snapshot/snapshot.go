@@ -58,6 +58,7 @@ type Options struct {
 	Pricing     *provider.Pricing  // optional, for usage cost attribution
 	Sink        event.Sink         // optional, emits a Usage event for accounting
 	MaxTokens   int                // default defaultMaxTokens
+	Force       bool               // bypass a fresh cache and regenerate (manual refresh)
 }
 
 const (
@@ -68,19 +69,39 @@ const (
 // Generate produces a snapshot, reading from / writing to the sidecar cache when
 // SessionPath is set. It returns an error on any failure; callers should fall
 // back to a heuristic summary rather than surface this to the user.
+//
+// Updates are incremental when possible: if a previous snapshot exists whose
+// cursor (CoveredCount) is behind the current message count, the model is fed the
+// previous snapshot plus only the messages that arrived since — so a long task
+// costs ~constant tokens per refresh instead of re-reading the whole transcript.
+// Every fullResyncEvery-th update is a full re-summarization (drift correction).
 func Generate(ctx context.Context, opts Options) (*Snapshot, error) {
 	if opts.Prov == nil {
 		return nil, errors.New("snapshot: provider not configured")
 	}
-	if cached, ok := loadCache(opts.SessionPath, opts.Messages); ok {
-		return cached, nil
+	n := len(opts.Messages)
+	entry := loadEntry(opts.SessionPath)
+	if !opts.Force && entry != nil && entry.CoveredCount >= n && !agedOut(entry.GeneratedAt) {
+		snap := entry.Snapshot
+		return &snap, nil
 	}
 
 	maxTokens := opts.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = defaultMaxTokens
 	}
-	sys, user := buildPrompt(opts.Messages, opts.Goal)
+
+	var sys, user string
+	updates := 0
+	if entry != nil && entry.CoveredCount > 0 && entry.CoveredCount < n && entry.Updates < fullResyncEvery {
+		// Incremental: previous snapshot + only the new messages past the cursor.
+		sys, user = buildIncrementalPrompt(entry.Snapshot, opts.Messages[entry.CoveredCount:], opts.Goal)
+		updates = entry.Updates + 1
+	} else {
+		// First snapshot, history shrank (compaction rewrote it), or drift re-sync.
+		sys, user = buildPrompt(opts.Messages, opts.Goal)
+		updates = 0
+	}
 
 	text, err := stream(ctx, opts, sys, user, maxTokens)
 	if err != nil {
@@ -91,7 +112,7 @@ func Generate(ctx context.Context, opts Options) (*Snapshot, error) {
 		return nil, err
 	}
 	snap.GeneratedAt = time.Now().Unix()
-	saveCache(opts.SessionPath, opts.Messages, snap)
+	saveEntry(opts.SessionPath, n, snap, updates)
 	return snap, nil
 }
 
@@ -185,6 +206,23 @@ func buildPrompt(msgs []provider.Message, goal string) (sys, user string) {
 	b.WriteString("Recent activity (tool results that failed are marked [FAILED]):\n")
 	b.WriteString(renderTranscript(msgs))
 	return systemPrompt, b.String()
+}
+
+// buildIncrementalPrompt assembles an UPDATE call: the previous snapshot (so the
+// model revises rather than re-derives) plus only the messages that landed since
+// the snapshot's cursor. Bounding the input to the prior summary + the delta is
+// what keeps a long task cheap to refresh.
+func buildIncrementalPrompt(prev Snapshot, delta []provider.Message, goal string) (sys, user string) {
+	var b strings.Builder
+	if g := strings.TrimSpace(goal); g != "" {
+		fmt.Fprintf(&b, "Task goal: %s\n\n", g)
+	}
+	if pj, err := json.Marshal(prev); err == nil {
+		fmt.Fprintf(&b, "Previous snapshot (JSON):\n%s\n\n", string(pj))
+	}
+	b.WriteString("New activity since the previous snapshot (failed tool results marked [FAILED]):\n")
+	b.WriteString(renderTranscript(delta))
+	return incrementalSystemPrompt, b.String()
 }
 
 // extractCompactSummary returns the most recent <compaction-summary>… block, if

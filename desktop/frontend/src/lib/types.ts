@@ -1006,4 +1006,5 @@ export interface TaskSnapshot {
   actions?: MissionAction[];
   deadEnds?: string[];
   generatedBy: "heuristic" | "llm";
+  generatedAt?: number;
 }

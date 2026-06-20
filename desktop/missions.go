@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/boot"
@@ -68,6 +69,7 @@ type TaskSnapshot struct {
 	Actions     []MissionAction `json:"actions,omitempty"`
 	DeadEnds    []string        `json:"deadEnds,omitempty"`
 	GeneratedBy string          `json:"generatedBy"` // "heuristic" (M1) | "llm" (M2)
+	GeneratedAt int64           `json:"generatedAt"` // unix seconds — when this summary was produced (for "X ago" + staleness)
 }
 
 // MissionAction is one step in a task's recent activity, for the snapshot view.
@@ -136,7 +138,78 @@ func (a *App) MissionTasks() []MissionTask {
 		}
 		out = append(out, missionTaskFromSessionMeta(s))
 	}
+	// Pre-warm snapshots for tasks at a decision point or stopped, so a later
+	// expand is instant. Live tabs only; the snapshot package self-skips a warm
+	// cache. See refreshStoppedSnapshots.
+	a.refreshStoppedSnapshots(tabs)
 	return out
+}
+
+// refreshStoppedSnapshots pre-generates (incremental) snapshots in the background
+// for live tabs that are waiting on the user or have stopped — the moments the
+// user is most likely to glance at the board, where an on-demand call would
+// otherwise show a spinner. Tabs still mid-turn are skipped (summarize when they
+// stop); each tab is deduped via snapshotInflight so repeated board refreshes
+// don't stack calls. The snapshot package self-skips when its cache is warm.
+func (a *App) refreshStoppedSnapshots(tabs []*WorkspaceTab) {
+	for _, tab := range tabs {
+		if tab == nil || tab.Ctrl == nil {
+			continue
+		}
+		ctrl := tab.Ctrl
+		if rs := ctrl.RuntimeStatus(); rs.Running && !rs.PendingPrompt {
+			continue // mid-turn — summarize when it stops
+		}
+		sessionPath := ctrl.SessionPath()
+		if sessionPath == "" {
+			continue
+		}
+		if !snapshot.NeedsUpdate(sessionPath, len(ctrl.History())) {
+			continue
+		}
+		a.kickSnapshot(tab.ID, sessionPath, currentTabGoal(tab), ctrl.History())
+	}
+}
+
+// kickSnapshot launches a background snapshot generation for one tab unless one
+// is already in flight for it (dedup across board refreshes and on-demand
+// expands). It copies the history so the goroutine reads a stable snapshot while
+// the agent may keep appending.
+func (a *App) kickSnapshot(tabID, sessionPath, goal string, msgs []provider.Message) {
+	a.snapshotGenMu.Lock()
+	if a.snapshotInflight == nil {
+		a.snapshotInflight = make(map[string]bool)
+	}
+	if a.snapshotInflight[tabID] {
+		a.snapshotGenMu.Unlock()
+		return
+	}
+	a.snapshotInflight[tabID] = true
+	a.snapshotGenMu.Unlock()
+	hist := append([]provider.Message(nil), msgs...)
+	go a.generateSnapshotBackground(tabID, sessionPath, goal, hist)
+}
+
+// generateSnapshotBackground fills the snapshot cache for one tab (incrementally)
+// and clears the inflight flag. The result is intentionally discarded — the
+// board reads it back from the cache on the next view or refresh.
+func (a *App) generateSnapshotBackground(tabID, sessionPath, goal string, msgs []provider.Message) {
+	defer func() {
+		a.snapshotGenMu.Lock()
+		delete(a.snapshotInflight, tabID)
+		a.snapshotGenMu.Unlock()
+	}()
+	prov, pricing := a.snapshotProvider()
+	if prov == nil {
+		return
+	}
+	_, _ = snapshot.Generate(a.bootContext(), snapshot.Options{
+		SessionPath: sessionPath,
+		Messages:    msgs,
+		Goal:        goal,
+		Prov:        prov,
+		Pricing:     pricing,
+	})
 }
 
 // TaskSnapshot returns the expandable summary for one task. It asks the snapshot
@@ -156,7 +229,57 @@ func (a *App) TaskSnapshot(tabID string) (TaskSnapshot, error) {
 		return TaskSnapshot{TabID: tabID, GeneratedBy: "heuristic"}, nil
 	}
 	ctrl := tab.Ctrl
-	return a.llmOrHeuristicSnapshot(tabID, ctrl.SessionPath(), currentTabGoal(tab), currentTabGoalStatus(tab), ctrl.History()), nil
+	sessionPath := ctrl.SessionPath()
+	goal := currentTabGoal(tab)
+	goalStatus := currentTabGoalStatus(tab)
+	hist := ctrl.History()
+
+	// Non-blocking (stale-while-revalidate): the last cached snapshot shows
+	// instantly, so expanding a card — even a task still running — never waits on
+	// an LLM call. The stop trigger (refreshStoppedSnapshots) keeps the cache
+	// fresh. We only kick a background fill when nothing is cached yet AND the
+	// task isn't mid-turn; a running task with no cache shows the heuristic until
+	// it stops and gets summarized.
+	if snap := snapshot.Load(sessionPath); snap != nil {
+		return toTaskSnapshot(tabID, snap, "llm"), nil
+	}
+	if !ctrl.RuntimeStatus().Running {
+		a.kickSnapshot(tabID, sessionPath, goal, hist)
+	}
+	return heuristicSnapshot(tabID, goal, goalStatus, hist), nil
+}
+
+// RefreshTaskSnapshot forces a fresh snapshot for one task (bypassing the cache)
+// and returns it. It is the board's manual "refresh summary" action — unlike
+// TaskSnapshot it blocks on the LLM call, because the user explicitly asked for
+// an update. Historical tasks ("hist:<sessionPath>") summarize that session file.
+func (a *App) RefreshTaskSnapshot(tabID string) (TaskSnapshot, error) {
+	if histPath, ok := strings.CutPrefix(tabID, "hist:"); ok {
+		if sess, err := agent.LoadSession(histPath); err == nil {
+			return a.llmOrHeuristicSnapshot(tabID, histPath, "", "", sess.Snapshot()), nil
+		}
+		return TaskSnapshot{TabID: tabID, GeneratedBy: "heuristic", GeneratedAt: time.Now().Unix()}, nil
+	}
+	tab := a.tabByID(tabID)
+	if tab == nil || tab.Ctrl == nil {
+		return TaskSnapshot{TabID: tabID, GeneratedBy: "heuristic", GeneratedAt: time.Now().Unix()}, nil
+	}
+	ctrl := tab.Ctrl
+	prov, pricing := a.snapshotProvider()
+	if prov != nil {
+		snap, err := snapshot.Generate(a.bootContext(), snapshot.Options{
+			SessionPath: ctrl.SessionPath(),
+			Messages:    ctrl.History(),
+			Goal:        currentTabGoal(tab),
+			Prov:        prov,
+			Pricing:     pricing,
+			Force:       true,
+		})
+		if err == nil {
+			return toTaskSnapshot(tabID, snap, "llm"), nil
+		}
+	}
+	return heuristicSnapshot(tabID, currentTabGoal(tab), currentTabGoalStatus(tab), ctrl.History()), nil
 }
 
 // llmOrHeuristicSnapshot generates an LLM snapshot and degrades to the M1
@@ -188,6 +311,7 @@ func toTaskSnapshot(tabID string, snap *snapshot.Snapshot, generatedBy string) T
 		NextStep:    snap.NextStep,
 		DeadEnds:    snap.DeadEnds,
 		GeneratedBy: generatedBy,
+		GeneratedAt: snap.GeneratedAt,
 	}
 	if len(snap.Actions) > 0 {
 		t.Actions = make([]MissionAction, len(snap.Actions))
@@ -390,6 +514,7 @@ func heuristicSnapshot(tabID, goal, goalStatus string, msgs []provider.Message) 
 		Purpose:     goal,
 		Progress:    missionProgressText(goalStatus),
 		GeneratedBy: "heuristic",
+		GeneratedAt: time.Now().Unix(),
 	}
 
 	// Fall back to the first user message when no explicit goal is set.
