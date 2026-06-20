@@ -3660,12 +3660,13 @@ type ProviderModelDraft = {
 };
 
 type AddProviderMode = null | "official" | "custom";
-type OfficialProviderKind = "deepseek" | "mimo-api" | "mimo-token-plan";
+type OfficialProviderKind = "deepseek" | "mimo-api" | "mimo-token-plan" | "zhipu";
 
 const OFFICIAL_PROVIDER_CHOICES: Array<{ kind: OfficialProviderKind; labelKey: DictKey; descKey: DictKey; keyEnv: string }> = [
   { kind: "deepseek", labelKey: "settings.addProvider.official.deepseek", descKey: "settings.addProvider.official.deepseekDesc", keyEnv: "DEEPSEEK_API_KEY" },
   { kind: "mimo-api", labelKey: "settings.addProvider.official.mimoApi", descKey: "settings.addProvider.official.mimoApiDesc", keyEnv: "MIMO_API_KEY" },
   { kind: "mimo-token-plan", labelKey: "settings.addProvider.official.mimoTokenPlan", descKey: "settings.addProvider.official.mimoTokenPlanDesc", keyEnv: "MIMO_API_KEY" },
+  { kind: "zhipu", labelKey: "settings.addProvider.official.zhipu", descKey: "settings.addProvider.official.zhipuDesc", keyEnv: "ZHIPU_API_KEY" },
 ];
 
 function AddProviderPanel({

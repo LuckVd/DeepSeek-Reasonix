@@ -164,6 +164,9 @@ function providerLabel(provider: string, t: ReturnType<typeof useT>): string {
     case "mimo-pro":
     case "mimo-flash":
       return t("settings.providerLabel.mimoTokenPlan");
+    case "zhipu":
+    case "glm":
+      return t("settings.providerLabel.zhipu");
     default:
       return provider;
   }
