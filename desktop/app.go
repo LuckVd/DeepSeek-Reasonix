@@ -104,8 +104,9 @@ type App struct {
 	snapshotProvMu sync.Mutex
 
 	// snapshotInflight dedups background snapshot generation per tab so repeated
-	// board refreshes don't fire overlapping LLM calls for the same task. The
-	// board pre-warms snapshots at stop points (see refreshStoppedSnapshots).
+	// on-demand expands don't fire overlapping LLM calls for the same task.
+	// Snapshots are generated when a card is expanded or manually refreshed
+	// (kickSnapshot), not pre-warmed board-wide.
 	snapshotInflight map[string]bool
 	snapshotGenMu    sync.Mutex
 

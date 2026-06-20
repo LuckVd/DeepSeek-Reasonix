@@ -955,6 +955,9 @@ export interface MissionTask {
   tabId: string;
   title?: string;
   goal?: string;
+  purpose?: string; // one-line "what is it doing": cached snapshot purpose, else goal
+  progress?: string; // cached snapshot progress — shown on the collapsed card
+  nextStep?: string; // cached snapshot nextStep — shown on the collapsed card
   goalStatus?: GoalStatus;
   runtimeState: "running" | "waiting" | "idle" | "done" | "blocked";
   currentStep?: string;

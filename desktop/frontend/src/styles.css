@@ -22256,9 +22256,11 @@ a[href] {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== Mission Control board (M1) =====
-   TODO(theme): fixed dark palette for the prototype; align with desktop theme
-   variables (dark/light) once the variable names are settled. */
+/* ===== Mission Control board =====
+   Self-contained light palette scoped via --ms-* tokens, so the board reads as a
+   bright workspace panel (sidebar / app chrome untouched). Brand = indigo→violet;
+   status colors are semantic by phase — amber = waiting, mint = running, blue =
+   done, grey = idle/historical, red = blocked/error. Red is errors only. */
 .mission-overlay {
   position: fixed;
   inset: 0;
@@ -22267,20 +22269,46 @@ a[href] {
   align-items: flex-start;
   justify-content: center;
   padding: 5vh 16px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-  animation: mission-fade 0.16s ease;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  animation: mission-fade 0.16s ease-out;
 }
 .mission-panel {
+  --ms-bg: #f8fafc;
+  --ms-card: #ffffff;
+  --ms-border: #e2e8f0;
+  --ms-border-strong: #cbd5e1;
+  --ms-fg: #0f172a;
+  --ms-fg-2: #64748b;
+  --ms-fg-3: #94a3b8;
+  --ms-brand: #6366f1;
+  --ms-brand-2: #8b5cf6;
+  --ms-brand-deep: #4f46e5;
+  --ms-brand-soft: #eef2ff;
+  --ms-wait: #f59e0b;   --ms-wait-bg: #fef3c7;
+  --ms-run: #10b981;    --ms-run-bg: #d1fae5;
+  --ms-done: #3b82f6;   --ms-done-bg: #dbeafe;
+  --ms-fail: #ef4444;   --ms-fail-bg: #fee2e2;
+  --ms-pause: #64748b;  --ms-pause-bg: #f1f5f9;
+  --ms-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --ms-shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --ms-r-card: 14px;
+  --ms-r-btn: 8px;
+  --ms-r-badge: 6px;
+  --ms-ease: 150ms ease-out;
+  --ms-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", sans-serif;
+  --ms-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+
   width: min(880px, 100%);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  color: var(--fg-dim);
+  background: var(--ms-bg);
+  border: 1px solid var(--ms-border);
+  border-radius: 16px;
+  box-shadow: var(--ms-shadow-lg);
+  color: var(--ms-fg-2);
+  font-family: var(--ms-font);
   overflow: hidden;
 }
 .mission-panel--page {
@@ -22299,228 +22327,337 @@ a[href] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border-soft);
+  padding: 16px 20px 12px;
 }
 .mission-panel__title { display: flex; align-items: center; gap: 10px; }
-.mission-panel__title h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
+.mission-panel__title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ms-fg);
+  letter-spacing: -0.01em;
+}
 .mission-panel__badge {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--warn);
-  color: var(--bg);
+  border-radius: var(--ms-r-badge);
+  background: var(--ms-wait-bg);
+  color: var(--ms-wait);
   font-weight: 600;
 }
-.mission-panel__actions { display: flex; gap: 4px; }
+.mission-panel__actions { display: flex; gap: 2px; }
 .mission-panel__refresh,
 .mission-panel__close {
   background: transparent;
   border: none;
-  color: var(--fg-faint);
+  color: var(--ms-fg-3);
   cursor: pointer;
-  padding: 5px;
-  border-radius: 6px;
+  padding: 6px;
+  border-radius: var(--ms-r-btn);
   display: flex;
   align-items: center;
+  transition: background var(--ms-ease), color var(--ms-ease);
 }
 .mission-panel__refresh:hover,
-.mission-panel__close:hover { background: var(--border-soft); color: var(--fg); }
+.mission-panel__close:hover { background: var(--ms-pause-bg); color: var(--ms-fg); }
 .mission-panel__spin { animation: mission-spin 0.8s linear infinite; }
+
 .mission-panel__filters {
   display: flex;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-soft);
+  gap: 6px;
+  padding: 0 20px 14px;
   flex-wrap: wrap;
 }
 .mission-panel__filter {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--fg-faint);
-  padding: 3px 10px;
-  border-radius: 14px;
+  background: var(--ms-card);
+  border: 1px solid var(--ms-border);
+  color: var(--ms-fg-2);
+  padding: 5px 13px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all var(--ms-ease);
 }
-.mission-panel__filter:hover { color: var(--fg-dim); }
-.mission-panel__filter--active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.mission-panel__body { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.mission-panel__empty { padding: 40px 16px; text-align: center; color: var(--fg-faint); font-size: 13px; }
+.mission-panel__filter:hover { border-color: var(--ms-border-strong); color: var(--ms-fg); }
+.mission-panel__filter--active {
+  background: linear-gradient(120deg, var(--ms-brand), var(--ms-brand-2));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.mission-panel__body { overflow-y: auto; padding: 4px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+.mission-panel__empty { padding: 56px 16px; text-align: center; color: var(--ms-fg-3); font-size: 13px; }
 
+/* ----- Task card: 4 sections (bar / title / detail / foot). ----- */
 .mission-card {
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--bg);
+  position: relative;
+  background: var(--ms-card);
+  border: 1px solid var(--ms-border);
+  border-radius: var(--ms-r-card);
   overflow: hidden;
+  transition: border-color var(--ms-ease), box-shadow var(--ms-ease), transform var(--ms-ease);
 }
-.mission-card:hover { border-color: var(--border); }
-.mission-card--waiting { border-color: var(--warn); }
-.mission-card--historical { opacity: 0.72; }
-.mission-card__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+.mission-card:hover { border-color: var(--ms-border-strong); box-shadow: var(--ms-shadow); }
+/* Left 3px status rail; idle shares amber with waiting (both = your turn). */
+.mission-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--ms-tone, var(--ms-pause));
+}
+.mission-card--running  { --ms-tone: var(--ms-run); }
+.mission-card--waiting,
+.mission-card--idle     { --ms-tone: var(--ms-wait); }
+.mission-card--done     { --ms-tone: var(--ms-done); }
+.mission-card--blocked  { --ms-tone: var(--ms-fail); }
+.mission-card--historical { --ms-tone: var(--ms-pause); opacity: 0.82; }
+.mission-card--archived { opacity: 0.62; }
+.mission-card--menu-open { overflow: visible; }
+.mission-card--menu-open:hover { box-shadow: var(--ms-shadow); }
+/* Sections 1–3 are the clickable glance surface (click toggles dead-ends). */
+.mission-card__main {
+  padding: 13px 16px 12px 18px;
   cursor: pointer;
   user-select: none;
 }
-.mission-card__head:hover { background: var(--bg-elev); }
-.mission-card__caret { color: var(--fg-faint); display: flex; }
-.mission-card__state {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--fg-faint);
-  white-space: nowrap;
-  min-width: 64px;
-}
-.mission-card__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
-.mission-card--running .mission-card__dot { background: #3fb950; }
-.mission-card--running .mission-card__state { color: #3fb950; }
-.mission-card--waiting .mission-card__dot { background: var(--warn); }
-.mission-card--waiting .mission-card__state { color: var(--warn); }
-.mission-card--blocked .mission-card__dot { background: #f85149; }
-.mission-card--blocked .mission-card__state { color: #f85149; }
-.mission-card--done .mission-card__dot { background: var(--fg-faint); }
-.mission-card--idle .mission-card__dot { background: var(--fg-faint); }
-.mission-card__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg);
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 280px;
-}
-.mission-card__step {
-  flex: 1 1 auto;
-  font-size: 12px;
-  color: var(--fg-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mission-card__meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--fg-faint);
-  white-space: nowrap;
-}
-.mission-card__model { padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; }
-.mission-card__hint { padding: 2px 12px 8px 32px; font-size: 12px; color: var(--warn); }
-.mission-card__body { padding: 4px 14px 14px; border-top: 1px solid var(--bg-elev); }
-.mission-card__loading { padding: 8px 0; font-size: 12px; color: var(--fg-faint); }
-.mission-card__open {
-  margin-top: 10px;
-  background: var(--border-soft);
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.mission-card__open:hover { background: var(--border); color: var(--fg); }
+.mission-card__main:active { transform: scale(0.997); }
 
+/* 1. Top status bar: badge + model tag + project + caret. */
+.mission-card__bar { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.mission-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--ms-r-badge);
+  background: var(--ms-tone-bg, var(--ms-pause-bg));
+  color: var(--ms-tone, var(--ms-pause));
+  font-size: 11px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.mission-card__badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.mission-card--running .mission-card__badge-dot { animation: mission-pulse 1.4s ease-in-out infinite; }
+.mission-card--running  .mission-card__badge { --ms-tone-bg: var(--ms-run-bg); }
+.mission-card--waiting  .mission-card__badge,
+.mission-card--idle     .mission-card__badge { --ms-tone-bg: var(--ms-wait-bg); }
+.mission-card--done     .mission-card__badge { --ms-tone-bg: var(--ms-done-bg); }
+.mission-card--blocked  .mission-card__badge { --ms-tone-bg: var(--ms-fail-bg); }
+.mission-card--historical .mission-card__badge { --ms-tone-bg: var(--ms-pause-bg); }
+.mission-card__model {
+  font-family: var(--ms-font-mono);
+  font-size: 11px;
+  color: var(--ms-fg-2);
+  background: var(--ms-pause-bg);
+  padding: 2px 7px;
+  border-radius: var(--ms-r-badge);
+  flex: 0 0 auto;
+}
+.mission-card__scope {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ms-fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-card__caret { color: var(--ms-fg-3); display: flex; transition: color var(--ms-ease); }
+.mission-card:hover .mission-card__caret { color: var(--ms-fg-2); }
+
+/* 2. Title. */
+.mission-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ms-fg);
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 3. Detail: 进度 | 下一步. */
+.mission-card__detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ms-border);
+}
+.mission-card__field { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mission-card__field-k {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ms-fg-3);
+}
+.mission-card__field-v {
+  font-size: 12.5px;
+  color: var(--ms-fg-2);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Pending approvals/asks — always visible when blocked on the user. */
+.mission-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 8px 18px;
+  border-top: 1px solid var(--ms-border);
+  background: var(--ms-wait-bg);
+}
+.mission-pending { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; font-size: 12px; color: var(--ms-wait); }
+.mission-pending__text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 4. Foot: time + hover-revealed actions. */
+.mission-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 8px 18px;
+  border-top: 1px solid var(--ms-border);
+}
+.mission-card__time { font-size: 11px; color: var(--ms-fg-3); }
+.mission-card__hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--ms-ease);
+}
+.mission-card:hover .mission-card__hover-actions { opacity: 1; }
+
+/* Expanded body: dead-ends (the only expand-only detail). */
+.mission-card__body { padding: 4px 16px 14px 18px; border-top: 1px solid var(--ms-border); }
+.mission-card__loading { padding: 8px 0; font-size: 12px; color: var(--ms-fg-3); }
 .mission-card__snap-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 0 2px;
-  margin-top: 4px;
+  padding: 8px 0 0;
+  margin-top: 6px;
 }
-.mission-card__snap-status { font-size: 11px; color: var(--fg-faint); }
-.mission-btn--refresh-snap { padding: 2px 8px; font-size: 11px; }
+.mission-card__snap-status { font-size: 11px; color: var(--ms-fg-3); }
 
-.mission-snap { display: flex; flex-direction: column; gap: 10px; padding: 8px 0; }
-.mission-snap__section { display: flex; flex-direction: column; gap: 3px; }
+/* Snapshot (dead-ends). */
+.mission-snap { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 2px; }
+.mission-snap__section { display: flex; flex-direction: column; gap: 4px; }
 .mission-snap__label {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
+  letter-spacing: 0.05em;
+  color: var(--ms-fg-3);
 }
-.mission-snap__value { font-size: 13px; color: var(--fg-dim); line-height: 1.5; }
+.mission-snap__value { font-size: 12.5px; color: var(--ms-fg-2); line-height: 1.5; }
 .mission-snap__section--emphasis {
-  background: rgba(248, 81, 73, 0.08);
-  border: 1px solid rgba(248, 81, 73, 0.25);
-  border-radius: 6px;
-  padding: 8px;
+  background: var(--ms-fail-bg);
+  border: 1px solid var(--ms-fail);
+  border-radius: var(--ms-r-btn);
+  padding: 9px 11px;
 }
-.mission-snap__section--emphasis .mission-snap__label { color: #f85149; }
-.mission-snap__list {
-  margin: 0;
-  padding-left: 2px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.mission-snap__item--failed { color: #f85149; }
-.mission-snap__list--deadends li { font-size: 12.5px; color: #f0b72f; }
+.mission-snap__section--emphasis .mission-snap__label { color: var(--ms-fail); }
+.mission-snap__list { margin: 0; padding-left: 2px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.mission-snap__list--deadends li { font-size: 12.5px; color: var(--ms-fg-2); }
 
 @keyframes mission-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mission-spin { to { transform: rotate(360deg); } }
+@keyframes mission-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-/* M3 action row — approve / switch model / close out without tabbing in. */
-.mission-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px 8px 32px;
-  border-top: 1px solid var(--bg-elev);
-}
-.mission-card--archived { opacity: 0.6; }
-.mission-pending {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 8px;
-  background: rgba(210, 153, 34, 0.1);
-  border: 1px solid rgba(210, 153, 34, 0.3);
-  border-radius: 6px;
-}
-.mission-pending__text {
-  flex: 1 1 auto;
-  font-size: 12px;
-  color: #e3b341;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Buttons (on-brand). */
 .mission-btn {
-  background: var(--border-soft);
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  padding: 3px 10px;
-  border-radius: 5px;
+  background: var(--ms-card);
+  border: 1px solid var(--ms-border);
+  color: var(--ms-fg-2);
+  padding: 4px 11px;
+  border-radius: var(--ms-r-btn);
   font-size: 12px;
+  font-weight: 500;
+  font-family: var(--ms-font);
   cursor: pointer;
+  transition: all var(--ms-ease);
 }
-.mission-btn:hover:not(:disabled) { background: var(--border); color: var(--fg); }
+.mission-btn:hover:not(:disabled) { border-color: var(--ms-border-strong); color: var(--ms-fg); background: var(--ms-pause-bg); }
 .mission-btn:disabled { opacity: 0.5; cursor: default; }
-.mission-btn--ok { background: #1a3a2a; border-color: #2ea043; color: #7ee787; }
-.mission-btn--ok:hover:not(:disabled) { background: #238636; color: #fff; }
-.mission-btn--no { border-color: rgba(248, 81, 73, 0.4); color: #ffa198; }
-.mission-btn--no:hover:not(:disabled) { background: #3a1d1d; color: #fff; }
-.mission-card__model-select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  padding: 3px 6px;
-  border-radius: 5px;
+.mission-btn--ok { background: var(--ms-run); border-color: var(--ms-run); color: #fff; }
+.mission-btn--ok:hover:not(:disabled) { filter: brightness(1.07); }
+.mission-btn--no { color: var(--ms-fail); border-color: var(--ms-fail-bg); background: var(--ms-card); }
+.mission-btn--no:hover:not(:disabled) { background: var(--ms-fail); border-color: var(--ms-fail); color: #fff; }
+.mission-btn--refresh-snap { padding: 3px 9px; font-size: 11px; }
+.mission-card__open {
+  background: transparent;
+  border: 1px solid var(--ms-border);
+  color: var(--ms-fg-2);
+  padding: 4px 10px;
+  border-radius: var(--ms-r-btn);
   font-size: 12px;
+  font-weight: 500;
+  font-family: var(--ms-font);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all var(--ms-ease);
 }
-.mission-card__model-select:hover { border-color: var(--accent); }
+.mission-card__open:hover { border-color: var(--ms-brand); color: var(--ms-brand); }
+
+/* ⋯ menu (完成/放弃) — only the trigger shows until clicked. */
+.mission-card__menu { position: relative; }
+.mission-card__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: var(--ms-r-btn);
+  color: var(--ms-fg-3);
+  cursor: pointer;
+  transition: all var(--ms-ease);
+}
+.mission-card__more:hover { background: var(--ms-pause-bg); color: var(--ms-fg); }
+.mission-card__menu-backdrop { position: fixed; inset: 0; z-index: var(--z-local-backdrop); }
+.mission-card__menu-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--z-local-popover);
+  min-width: 148px;
+  padding: 5px;
+  background: var(--ms-card);
+  border: 1px solid var(--ms-border);
+  border-radius: var(--ms-r-btn);
+  box-shadow: var(--ms-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mission-card__menu-item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ms-fg-2);
+  padding: 8px 11px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-family: var(--ms-font);
+  cursor: pointer;
+  transition: background var(--ms-ease), color var(--ms-ease);
+}
+.mission-card__menu-item:hover:not(:disabled) { background: var(--ms-brand-soft); color: var(--ms-brand-deep); }
+.mission-card__menu-item:disabled { opacity: 0.5; cursor: default; }
+.mission-card__menu-item--danger { color: var(--ms-fail); }
+.mission-card__menu-item--danger:hover:not(:disabled) { background: var(--ms-fail-bg); color: var(--ms-fail); }

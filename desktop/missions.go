@@ -29,6 +29,9 @@ type MissionTask struct {
 	TabID          string           `json:"tabId"`
 	Title          string           `json:"title,omitempty"`
 	Goal           string           `json:"goal,omitempty"`
+	Purpose        string           `json:"purpose,omitempty"`    // one-line "what is it doing": cached snapshot purpose, else goal
+	Progress       string           `json:"progress,omitempty"`   // cached snapshot progress (where it's at) — shown on the collapsed card
+	NextStep       string           `json:"nextStep,omitempty"`   // cached snapshot nextStep (what's next) — shown on the collapsed card
 	GoalStatus     string           `json:"goalStatus,omitempty"` // control.GoalStatus* (running/complete/blocked/stopped)
 	RuntimeState   string           `json:"runtimeState"`         // running | waiting | idle | done | blocked
 	CurrentStep    string           `json:"currentStep,omitempty"`
@@ -138,43 +141,18 @@ func (a *App) MissionTasks() []MissionTask {
 		}
 		out = append(out, missionTaskFromSessionMeta(s))
 	}
-	// Pre-warm snapshots for tasks at a decision point or stopped, so a later
-	// expand is instant. Live tabs only; the snapshot package self-skips a warm
-	// cache. See refreshStoppedSnapshots.
-	a.refreshStoppedSnapshots(tabs)
+	// Snapshots are generated on demand (TaskSnapshot on expand,
+	// RefreshTaskSnapshot on the manual button) — see kickSnapshot. The board no
+	// longer pre-warms them: the real-time head (runtimeState / pending /
+	// currentStep) answers "what is it doing / does it need me" at a glance
+	// without an LLM, so there is no need to summarize tabs the user never opens.
 	return out
 }
 
-// refreshStoppedSnapshots pre-generates (incremental) snapshots in the background
-// for live tabs that are waiting on the user or have stopped — the moments the
-// user is most likely to glance at the board, where an on-demand call would
-// otherwise show a spinner. Tabs still mid-turn are skipped (summarize when they
-// stop); each tab is deduped via snapshotInflight so repeated board refreshes
-// don't stack calls. The snapshot package self-skips when its cache is warm.
-func (a *App) refreshStoppedSnapshots(tabs []*WorkspaceTab) {
-	for _, tab := range tabs {
-		if tab == nil || tab.Ctrl == nil {
-			continue
-		}
-		ctrl := tab.Ctrl
-		if rs := ctrl.RuntimeStatus(); rs.Running && !rs.PendingPrompt {
-			continue // mid-turn — summarize when it stops
-		}
-		sessionPath := ctrl.SessionPath()
-		if sessionPath == "" {
-			continue
-		}
-		if !snapshot.NeedsUpdate(sessionPath, len(ctrl.History())) {
-			continue
-		}
-		a.kickSnapshot(tab.ID, sessionPath, currentTabGoal(tab), ctrl.History())
-	}
-}
-
 // kickSnapshot launches a background snapshot generation for one tab unless one
-// is already in flight for it (dedup across board refreshes and on-demand
-// expands). It copies the history so the goroutine reads a stable snapshot while
-// the agent may keep appending.
+// is already in flight for it (dedup across on-demand expands). It copies the
+// history so the goroutine reads a stable snapshot while the agent may keep
+// appending.
 func (a *App) kickSnapshot(tabID, sessionPath, goal string, msgs []provider.Message) {
 	a.snapshotGenMu.Lock()
 	if a.snapshotInflight == nil {
@@ -236,10 +214,11 @@ func (a *App) TaskSnapshot(tabID string) (TaskSnapshot, error) {
 
 	// Non-blocking (stale-while-revalidate): the last cached snapshot shows
 	// instantly, so expanding a card — even a task still running — never waits on
-	// an LLM call. The stop trigger (refreshStoppedSnapshots) keeps the cache
-	// fresh. We only kick a background fill when nothing is cached yet AND the
-	// task isn't mid-turn; a running task with no cache shows the heuristic until
-	// it stops and gets summarized.
+	// an LLM call. The cache is filled on demand here (kickSnapshot) and by the
+	// manual "refresh summary" button; there is no board-wide pre-warm. We only
+	// kick a background fill when nothing is cached yet AND the task isn't
+	// mid-turn; a running task with no cache shows the heuristic until it stops
+	// and gets summarized.
 	if snap := snapshot.Load(sessionPath); snap != nil {
 		return toTaskSnapshot(tabID, snap, "llm"), nil
 	}
@@ -443,6 +422,9 @@ func missionTaskFromTab(tab *WorkspaceTab, active, detached bool) MissionTask {
 	if t.Title == "" {
 		t.Title = missionFallbackTitle(t.Goal, t.SessionPath)
 	}
+	// Purpose/progress/nextStep from the cached snapshot if available (free sidecar
+	// read), else the goal. Read-only — never triggers generation.
+	t.Purpose, t.Progress, t.NextStep = missionCachedSummary(t.SessionPath, t.Goal)
 	return t
 }
 
@@ -451,10 +433,14 @@ func missionTaskFromSessionMeta(s SessionMeta) MissionTask {
 	if goal == "" {
 		goal = strings.TrimSpace(s.Preview) // first user message stands in for the goal
 	}
+	purpose, progress, nextStep := missionCachedSummary(s.Path, goal)
 	return MissionTask{
 		TabID:          "hist:" + s.Path,
 		Title:          goal,
 		Goal:           goal,
+		Purpose:        purpose,
+		Progress:       progress,
+		NextStep:       nextStep,
 		SessionPath:    s.Path,
 		WorkspaceRoot:  s.WorkspaceRoot,
 		TopicTitle:     s.TopicTitle,
@@ -484,6 +470,26 @@ func missionRuntimeState(rs control.RuntimeStatus, goalStatus string) string {
 		return "blocked"
 	}
 	return "idle"
+}
+
+// missionCachedSummary reads the cached LLM snapshot (a free sidecar read — no
+// provider, no generation) and returns its purpose/progress/nextStep, so the
+// collapsed card can show the summary's key lines without expanding and without
+// paying for on-demand generation. Purpose falls back to the goal when no
+// snapshot exists; progress/nextStep are empty then.
+func missionCachedSummary(sessionPath, goal string) (purpose, progress, nextStep string) {
+	purpose = goal
+	if sessionPath == "" {
+		return
+	}
+	if snap := snapshot.Load(sessionPath); snap != nil {
+		if p := strings.TrimSpace(snap.Purpose); p != "" {
+			purpose = p
+		}
+		progress = strings.TrimSpace(snap.Progress)
+		nextStep = strings.TrimSpace(snap.NextStep)
+	}
+	return
 }
 
 // lastActivitySummary is the M1 "what is it doing right now" hint, derived
